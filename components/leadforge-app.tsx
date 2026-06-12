@@ -44,6 +44,7 @@ import { PipelinePanel } from "@/components/views/pipeline-view";
 import { ImportHelpPanel, ImportPanel } from "@/components/views/import-view";
 import { DatabaseView } from "@/components/views/database-view";
 import { ScheduleView } from "@/components/views/schedule-view";
+import { TeamView } from "@/components/views/team-view";
 
 const viewTitles: Record<View, { title: string; subtitle: string }> = {
   command: {
@@ -69,6 +70,10 @@ const viewTitles: Record<View, { title: string; subtitle: string }> = {
   schedule: {
     title: "Schedule",
     subtitle: "Your follow-up queue — overdue first, then today and this week."
+  },
+  team: {
+    title: "Team",
+    subtitle: "Who shares this workspace. Add registered teammates by email."
   }
 };
 
@@ -389,10 +394,14 @@ export default function LeadForgeApp() {
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ maxPages: 5 })
       });
-      const data = (await response.json()) as { lead?: Lead; error?: string };
+      const data = (await response.json()) as { lead?: Lead; queued?: boolean; error?: string };
       if (!response.ok || !data.lead) throw new Error(data.error || "Crawler failed");
       setSelectedLeadId(data.lead.id);
-      setNotice(`Crawler completed for ${data.lead.businessName}.`);
+      setNotice(
+        data.queued
+          ? `Crawl for ${data.lead.businessName} queued for the worker machine.`
+          : `Crawler completed for ${data.lead.businessName}.`
+      );
       await loadData();
     } catch (error) {
       setNotice(error instanceof Error ? error.message : "Crawler failed.");
@@ -438,14 +447,21 @@ export default function LeadForgeApp() {
       const data = (await response.json()) as {
         lead?: Lead;
         warnings?: string[];
+        queued?: boolean;
         error?: string;
       };
       if (!response.ok || !data.lead) throw new Error(data.error || "Diagnosis failed");
       setSelectedLeadId(data.lead.id);
-      const warningNote = data.warnings?.length ? ` (${data.warnings.join(" ")})` : "";
-      setNotice(
-        `Full diagnosis done for ${data.lead.businessName} — score ${data.lead.score}/100, outreach drafted.${warningNote}`
-      );
+      if (data.queued) {
+        setNotice(
+          `Diagnosis for ${data.lead.businessName} queued for the crawler worker — results will appear after the worker processes it (Refresh data to check).`
+        );
+      } else {
+        const warningNote = data.warnings?.length ? ` (${data.warnings.join(" ")})` : "";
+        setNotice(
+          `Full diagnosis done for ${data.lead.businessName} — score ${data.lead.score}/100, outreach drafted.${warningNote}`
+        );
+      }
       await loadData();
     } catch (error) {
       setNotice(error instanceof Error ? error.message : "Diagnosis failed.");
@@ -784,6 +800,8 @@ export default function LeadForgeApp() {
               onPush={(lead, days) => void pushFollowUp(lead, days)}
             />
           ) : null}
+
+          {activeView === "team" ? <TeamView onNotice={setNotice} /> : null}
 
           {activeView === "import" ? (
             <section className="grid items-start gap-3 lg:grid-cols-[minmax(0,1fr)_320px]">

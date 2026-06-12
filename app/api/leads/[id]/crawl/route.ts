@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
+import { isRemoteBackend } from "@/lib/backend";
 import { crawlWebsite } from "@/lib/crawler";
-import { getLead, replaceLead } from "@/lib/store";
+import { enqueueCrawlJob, getLead, replaceLead } from "@/lib/store";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -13,6 +14,16 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
   if (!lead) return NextResponse.json({ error: "Lead not found" }, { status: 404 });
   if (!lead.website) {
     return NextResponse.json({ error: "Lead has no website to crawl" }, { status: 400 });
+  }
+
+  // Shared online mode: Playwright runs on the worker machine, not here.
+  if (isRemoteBackend()) {
+    const jobId = await enqueueCrawlJob({
+      leadId: lead.id,
+      jobType: "crawl",
+      payload: { maxPages: body.maxPages ?? 5 }
+    });
+    return NextResponse.json({ queued: true, jobId, lead });
   }
 
   try {

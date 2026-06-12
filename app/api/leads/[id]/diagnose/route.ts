@@ -1,10 +1,11 @@
 import { NextResponse } from "next/server";
 import { auditWebsite } from "@/lib/audit";
+import { isRemoteBackend } from "@/lib/backend";
 import { crawlWebsite } from "@/lib/crawler";
 import { generateOutreach } from "@/lib/outreach";
 import { pageSpeedSignals, runPageSpeed } from "@/lib/pagespeed";
 import { refreshLeadScore } from "@/lib/scoring";
-import { getLead, replaceLead } from "@/lib/store";
+import { enqueueCrawlJob, getLead, replaceLead } from "@/lib/store";
 import type { Lead, PainSignal, WebsiteAudit } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -20,6 +21,16 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
   const body = (await request.json().catch(() => ({}))) as { maxPages?: number };
   const lead = await getLead(id);
   if (!lead) return NextResponse.json({ error: "Lead not found" }, { status: 404 });
+
+  // Shared online mode: heavy work goes to the crawler worker machine.
+  if (isRemoteBackend()) {
+    const jobId = await enqueueCrawlJob({
+      leadId: lead.id,
+      jobType: "diagnose",
+      payload: { maxPages: body.maxPages ?? 5 }
+    });
+    return NextResponse.json({ queued: true, jobId, lead });
+  }
 
   const warnings: string[] = [];
   let working: Lead = { ...lead };

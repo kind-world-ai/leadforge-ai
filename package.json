@@ -3,26 +3,17 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "main": "electron/main.cjs",
   "scripts": {
     "dev": "next dev --webpack -p 3020",
     "build": "next build --webpack",
     "start": "next start -p 3020",
-    "desktop": "electron electron/main.cjs",
-    "desktop:dev": "electron electron/main.cjs",
-    "desktop:prepare": "npm run build && node scripts/prepare-desktop.cjs",
-    "desktop:smoke": "npm run desktop:prepare && LEADFORGE_DESKTOP_SMOKE=1 electron electron/main.cjs",
-    "desktop:rebuild-electron": "node scripts/rebuild-standalone-electron.cjs",
-    "desktop:prepare-package": "npm run desktop:prepare && npm run desktop:rebuild-electron",
-    "desktop:restore-node": "npm rebuild better-sqlite3",
-    "desktop:pack": "npm run desktop:prepare-package && electron-builder --dir && npm run desktop:restore-node",
-    "desktop:dist": "npm run desktop:prepare-package && electron-builder && npm run desktop:restore-node",
-    "desktop:dist:mac": "npm run desktop:prepare-package && electron-builder --mac && npm run desktop:restore-node",
-    "desktop:dist:win": "npm run desktop:prepare && node scripts/rebuild-standalone-electron.cjs --arch x64 && electron-builder --win --x64 && npm run desktop:restore-node",
-    "desktop:dist:win:arm64": "npm run desktop:prepare && node scripts/rebuild-standalone-electron.cjs --arch arm64 && electron-builder --win --arm64 && npm run desktop:restore-node",
+    "worker:build": "esbuild worker/index.ts --bundle --platform=node --packages=external --alias:@=. --outfile=worker/.build/worker.cjs",
+    "worker": "npm run worker:build && node --env-file=.env.local worker/.build/worker.cjs",
     "lint": "next lint"
   },
   "dependencies": {
+    "@supabase/ssr": "^0.12.0",
+    "@supabase/supabase-js": "^2.108.1",
     "better-sqlite3": "^12.10.0",
     "lucide-react": "0.427.0",
     "next": "^16.2.9",
@@ -33,58 +24,13 @@
   "overrides": {
     "postcss": "8.5.10"
   },
-  "build": {
-    "appId": "com.leadforge.ai",
-    "productName": "LeadForge AI",
-    "asar": true,
-    "directories": {
-      "output": "desktop-dist"
-    },
-    "files": [
-      "electron/**/*",
-      ".next/standalone/**/*",
-      ".next/static/**/*",
-      "package.json"
-    ],
-    "extraResources": [
-      {
-        "from": "desktop-seed-data",
-        "to": "seed-data",
-        "filter": [
-          "**/*"
-        ]
-      }
-    ],
-    "asarUnpack": [
-      ".next/standalone/**/*",
-      "node_modules/better-sqlite3/**/*"
-    ],
-    "mac": {
-      "target": [
-        "dmg",
-        "zip"
-      ],
-      "category": "public.app-category.business"
-    },
-    "win": {
-      "target": [
-        "nsis",
-        "portable"
-      ]
-    },
-    "nsis": {
-      "oneClick": false,
-      "allowToChangeInstallationDirectory": true
-    }
-  },
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.13",
     "@types/node": "20.14.10",
     "@types/react": "^19.2.17",
     "@types/react-dom": "^19.2.3",
     "autoprefixer": "10.4.20",
-    "electron": "^41.7.1",
-    "electron-builder": "^26.15.2",
+    "esbuild": "^0.28.0",
     "postcss": "8.5.10",
     "tailwindcss": "3.4.10",
     "typescript": "5.5.4"

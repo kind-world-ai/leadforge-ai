@@ -1,6 +1,13 @@
 import type { LeadInput, LeadSource, ServiceFocus } from "@/lib/types";
 
-export type View = "command" | "search" | "pipeline" | "import" | "database" | "schedule";
+export type View =
+  | "command"
+  | "search"
+  | "pipeline"
+  | "import"
+  | "database"
+  | "schedule"
+  | "team";
 
 export type LeadForm = LeadInput & {
   autoAudit: boolean;

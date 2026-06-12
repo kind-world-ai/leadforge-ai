@@ -17,16 +17,21 @@ Local-first lead discovery, website audit, outreach drafting, and pipeline track
 
 ## Run locally
 
+Two terminals — that's the whole setup:
+
 ```bash
-cd leadforge-ai
-npm run dev
+# Terminal 1 — the app
+npm run dev          # http://localhost:3020
+
+# Terminal 2 — the crawler worker (Playwright lives here)
+npm run worker
 ```
 
-Open:
+The app handles login, leads, imports, audits, PageSpeed, and drafts. The worker
+processes queued "Full diagnosis" / "Crawl site" jobs from Supabase. Teammates
+just need the app URL (or run the app themselves) — only this machine runs the worker.
 
-```text
-http://localhost:3020
-```
+First time on a machine: `npm install && npx playwright install chromium`.
 
 ## Google Places setup
 
@@ -53,6 +58,47 @@ Recommended flow:
 Use `Enriched` import when you intentionally want website/phone for every result in that search. That costs more than discovery.
 
 Manual Maps capture is for leads you personally find in Google Maps. Paste or type the business details, parse the paste, then save the lead. Do not automate browser scraping of Google Maps results.
+
+## Shared online mode (Supabase) + crawler worker
+
+The app supports two backends, switched with `DATA_BACKEND` in `.env.local`:
+
+- `sqlite` (default) — local-first, single user, works offline. No login.
+- `supabase` — shared Postgres online with login/register, team RLS, and a job queue
+  so Playwright only runs on one worker machine (keeps desktop builds small).
+
+### Setup (one time)
+
+1. Create a free project at supabase.com.
+2. Open Dashboard → SQL → New query, paste and run `supabase/migrations/001_init.sql`.
+3. In `.env.local` set:
+
+```text
+DATA_BACKEND=supabase
+NEXT_PUBLIC_SUPABASE_URL=https://YOUR-PROJECT.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=...   (Dashboard -> Settings -> API)
+SUPABASE_SERVICE_ROLE_KEY=...       (same page; keep secret, server/worker only)
+```
+
+4. Restart the app. You'll be redirected to `/login` — register; a team is created
+   automatically (signup trigger). Teammates who register can be added to your team
+   via the `team_members` table.
+
+### Crawler worker (one machine only)
+
+In supabase mode, "Full diagnosis" and "Crawl site" enqueue jobs in `crawl_jobs`
+instead of running Playwright locally. On the one machine that should do the heavy
+work (needs the same `.env.local` values plus Playwright browsers):
+
+```bash
+npx playwright install chromium
+npm run worker
+```
+
+The worker polls the queue, runs crawl → PageSpeed → rescore → outreach draft, and
+writes results to Supabase. Everyone's app sees updated leads on refresh.
+Light features (Places/OSM import, basic audit, PageSpeed button, drafts) still run
+inside the app — only browser automation moves to the worker.
 
 ## Lead acquisition channels
 
@@ -83,60 +129,55 @@ Business, https://site.com, City, Country, Sector, Phone, Email, Google Maps, We
 
 One website URL per line also works.
 
-## Windows path
+## Architecture
 
-This app is built as a normal Next.js and Node.js app first. That keeps development fast. Later we can wrap the same UI/backend in Electron for a Windows installer.
+```
+App (Next.js, npm run dev / deploy to Vercel)
+  -> Login/Register (Supabase Auth)
+  -> Leads, imports, audits, PageSpeed, drafts, pipeline, schedule
 
-Recommended next stack:
+Supabase Postgres (shared online database)
+  -> leads, search_runs, crawl_jobs, outreach_logs, teams, profiles
 
-- UI: Next.js App Router
-- Backend: Next.js route handlers on Node.js
-- Browser work: Playwright/Crawlee worker
-- Local database: SQLite
-- Desktop packaging: Electron
-
-## Desktop app
-
-Run the desktop shell locally:
-
-```bash
-npm run desktop
+Worker (npm run worker, ONE machine with Playwright)
+  -> Polls crawl_jobs, runs crawl -> PageSpeed -> rescore -> outreach
+  -> Writes results back to Supabase
 ```
 
-Create an unpacked desktop build for local testing:
+Electron packaging was removed — the app runs as a normal Next.js app.
+
+## Deploy online
+
+### App → Vercel (free)
+
+1. Push the repo to GitHub (make sure `.env.local` is NOT committed — it's gitignored).
+2. vercel.com → New Project → import the repo. Framework auto-detects Next.js.
+3. Add environment variables (Project → Settings → Environment Variables):
+   `DATA_BACKEND=supabase`, `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`,
+   `SUPABASE_SERVICE_ROLE_KEY`, `GOOGLE_PLACES_API_KEY`, `PAGESPEED_API_KEY` (optional),
+   `ABN_LOOKUP_GUID` (optional).
+4. Deploy. Teammates open the URL, register, and you add them in the Team view.
+
+All API-based features run on Vercel. "Full diagnosis" / "Crawl site" enqueue jobs
+for the worker — Vercel never runs Playwright.
+
+### Worker → your PC or a small VPS (~$5/mo)
+
+On your PC: `npm run worker` (jobs queue while it's off).
+
+On a VPS / Railway / any Docker host (always-on):
 
 ```bash
-npm run desktop:pack
+docker build -f worker/Dockerfile -t leadforge-worker .
+docker run -d --restart=always \
+  -e NEXT_PUBLIC_SUPABASE_URL=https://YOUR-PROJECT.supabase.co \
+  -e SUPABASE_SERVICE_ROLE_KEY=sb_secret_... \
+  -e PAGESPEED_API_KEY=... \
+  leadforge-worker
 ```
 
-Run the desktop smoke test before creating an installer:
-
-```bash
-npm run desktop:smoke
-```
-
-`desktop:pack` and `desktop:dist` rebuild the packaged standalone SQLite module for Electron automatically. If the desktop window is blank, run `npm run desktop:smoke` first; it will fail with the real startup error instead of creating a bad installer.
-
-Create installers:
-
-```bash
-npm run desktop:dist
-```
-
-Platform-specific installers:
-
-```bash
-npm run desktop:dist:mac
-npm run desktop:dist:win
-```
-
-The packaged app seeds its first database from the current `data/leadforge.sqlite`.
-After installation, user data is stored outside the app bundle:
-
-- macOS: `~/Library/Application Support/LeadForge AI/data/leadforge.sqlite`
-- Windows: `%APPDATA%\LeadForge AI\data\leadforge.sqlite`
-
-This means a future app update should not overwrite the user's live leads.
+Without Docker on a VPS: clone repo, `npm install`, `npx playwright install chromium`,
+copy `.env.local`, then `npm run worker` under pm2 (`pm2 start "npm run worker" --name leadforge-worker`).
 
 ## Local files
 

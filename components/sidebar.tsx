@@ -8,10 +8,12 @@ import {
   Download,
   Import,
   Loader2,
+  LogOut,
   RefreshCw,
   ShieldCheck,
   Table2,
-  Target
+  Target,
+  Users
 } from "lucide-react";
 import type React from "react";
 import type { View } from "@/components/app-state";
@@ -50,6 +52,9 @@ export default function Sidebar({
     { view: "search", label: "Source Engine", icon: <Compass className="h-4 w-4" /> },
     { view: "import", label: "Import", icon: <Import className="h-4 w-4" /> }
   ];
+  const teamEnabled = Boolean(
+    process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+  );
 
   return (
     <aside className="flex h-screen w-52 shrink-0 flex-col border-r border-line bg-side">
@@ -76,6 +81,15 @@ export default function Sidebar({
             <NavButton key={item.view} item={item} active={activeView === item.view} onClick={() => onNavigate(item.view)} />
           ))}
         </NavGroup>
+        {teamEnabled ? (
+          <NavGroup label="Settings">
+            <NavButton
+              item={{ view: "team", label: "Team", icon: <Users className="h-4 w-4" /> }}
+              active={activeView === "team"}
+              onClick={() => onNavigate("team")}
+            />
+          </NavGroup>
+        ) : null}
       </nav>
 
       {/* Footer actions */}
@@ -98,8 +112,32 @@ export default function Sidebar({
           <Download className="h-3.5 w-3.5" />
           Export CSV
         </a>
+        <SignOutButton />
       </div>
     </aside>
+  );
+}
+
+function SignOutButton() {
+  const authEnabled = Boolean(
+    process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+  );
+  if (!authEnabled) return null;
+
+  async function signOut() {
+    const { createSupabaseBrowserClient } = await import("@/lib/supabase/client");
+    await createSupabaseBrowserClient().auth.signOut();
+    window.location.href = "/login";
+  }
+
+  return (
+    <button
+      className="flex h-8 items-center gap-2 rounded-md px-2 text-xs font-medium text-soft transition hover:bg-ink/5 hover:text-ink"
+      onClick={() => void signOut()}
+    >
+      <LogOut className="h-3.5 w-3.5" />
+      Sign out
+    </button>
   );
 }
 
