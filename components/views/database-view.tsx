@@ -7,6 +7,7 @@ import {
   Download,
   ExternalLink,
   Search,
+  Trash2,
   X,
   Zap
 } from "lucide-react";
@@ -63,13 +64,15 @@ export function DatabaseView({
   busy,
   onOpen,
   onStatus,
-  onBulkDiagnose
+  onBulkDiagnose,
+  onBulkDelete
 }: {
   leads: Lead[];
   busy: string | null;
   onOpen: (id: string) => void;
   onStatus: (lead: Lead, status: LeadStatus) => void;
   onBulkDiagnose: (leads: Lead[]) => void;
+  onBulkDelete: (leads: Lead[]) => Promise<void>;
 }) {
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<LeadStatus | "All">("All");
@@ -339,6 +342,23 @@ export function DatabaseView({
           </Button>
           <Button variant="secondary" onClick={exportSelection} icon={<Download className="h-3.5 w-3.5" />}>
             Export selection
+          </Button>
+          <Button
+            variant="danger"
+            onClick={() => {
+              if (
+                confirm(
+                  `Delete ${selected.size} lead${selected.size === 1 ? "" : "s"} permanently? This cannot be undone.`
+                )
+              ) {
+                void onBulkDelete(selectedLeads).then(() => setSelected(new Set()));
+              }
+            }}
+            disabled={busy === "bulk-delete"}
+            busy={busy === "bulk-delete"}
+            icon={<Trash2 className="h-3.5 w-3.5" />}
+          >
+            Delete
           </Button>
           <Button variant="ghost" onClick={() => setSelected(new Set())} icon={<X className="h-3.5 w-3.5" />}>
             Clear

@@ -238,6 +238,25 @@ export function LeadListPanel(props: {
   );
 }
 
+function platformLabel(url: string): string {
+  try {
+    const host = new URL(url).hostname.replace(/^www\./, "");
+    if (host.includes("linkedin")) return "LinkedIn";
+    if (host.includes("clutch")) return "Clutch";
+    if (host.includes("facebook")) return "Facebook";
+    if (host.includes("instagram")) return "Instagram";
+    if (host.includes("justdial")) return "Justdial";
+    if (host.includes("goodfirms")) return "GoodFirms";
+    if (host.includes("indiamart")) return "IndiaMART";
+    if (host.includes("youtube")) return "YouTube";
+    if (host.includes("twitter") || host === "x.com") return "X";
+    if (host.includes("yelp")) return "Yelp";
+    return host.split(".")[0];
+  } catch {
+    return "Profile";
+  }
+}
+
 function speedTone(score: number | null): string {
   if (score == null) return "bg-field text-soft border-line";
   if (score >= 90) return "bg-moss/10 text-moss border-moss/30";
@@ -349,6 +368,7 @@ export function LeadDetailPanel({
   onAudit,
   onCrawl,
   onEnrichPlace,
+  onWebEnrich,
   onPageSpeed,
   onDiagnose,
   onDraft,
@@ -361,6 +381,7 @@ export function LeadDetailPanel({
   onAudit: (lead: Lead) => void;
   onCrawl: (lead: Lead) => void;
   onEnrichPlace: (lead: Lead) => void;
+  onWebEnrich: (lead: Lead) => void;
   onPageSpeed: (lead: Lead) => void;
   onDiagnose: (lead: Lead) => void;
   onDraft: (lead: Lead) => void;
@@ -432,6 +453,19 @@ export function LeadDetailPanel({
               <ExternalLink className="h-2.5 w-2.5" />
             </a>
           ) : null}
+          {lead.socials.slice(0, 6).map((social) => (
+            <a
+              key={social}
+              className="inline-flex h-6 items-center gap-1 rounded-full border border-sky/25 bg-sky/10 px-2 text-2xs font-medium text-sky transition hover:border-sky/50"
+              href={social}
+              target="_blank"
+              rel="noreferrer"
+              title={social}
+            >
+              {platformLabel(social)}
+              <ExternalLink className="h-2.5 w-2.5" />
+            </a>
+          ))}
           <StatusPill status={lead.status} />
         </div>
       </div>
@@ -479,6 +513,16 @@ export function LeadDetailPanel({
           title="Enrich from Google Places"
         >
           Enrich place
+        </Button>
+        <Button
+          variant="secondary"
+          onClick={() => onWebEnrich(lead)}
+          disabled={busy === `web-${lead.id}`}
+          busy={busy === `web-${lead.id}`}
+          icon={<Search className="h-3.5 w-3.5" />}
+          title="Search the web for LinkedIn, Clutch, Facebook profiles + website (official search API)"
+        >
+          Find profiles
         </Button>
         <Button
           variant="secondary"

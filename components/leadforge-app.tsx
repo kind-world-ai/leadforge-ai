@@ -508,6 +508,23 @@ export default function LeadForgeApp() {
     }
   }
 
+  async function bulkDelete(targets: Lead[]) {
+    if (!targets.length) return;
+    setBusy("bulk-delete");
+    let done = 0;
+    try {
+      for (const lead of targets) {
+        const response = await fetch(`/api/leads/${lead.id}`, { method: "DELETE" });
+        if (response.ok) done += 1;
+      }
+      setNotice(`Deleted ${done} of ${targets.length} lead${targets.length === 1 ? "" : "s"}.`);
+      setSelectedLeadId(null);
+      await loadData();
+    } finally {
+      setBusy(null);
+    }
+  }
+
   function markContacted(lead: Lead) {
     const next: LeadStatus =
       lead.status === "Contacted"
@@ -546,6 +563,30 @@ export default function LeadForgeApp() {
       await loadData();
     } catch (error) {
       setNotice(error instanceof Error ? error.message : "Follow-up update failed.");
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function webEnrichLead(lead: Lead) {
+    setBusy(`web-${lead.id}`);
+    setNotice("Searching the web for profiles (official search API)…");
+    try {
+      const response = await fetch(`/api/leads/${lead.id}/web-enrich`, { method: "POST" });
+      const data = (await response.json()) as {
+        lead?: Lead;
+        foundWebsite?: boolean;
+        profileCount?: number;
+        error?: string;
+      };
+      if (!response.ok || !data.lead) throw new Error(data.error || "Web enrichment failed");
+      setSelectedLeadId(data.lead.id);
+      setNotice(
+        `Found ${data.profileCount ?? 0} profile${data.profileCount === 1 ? "" : "s"} for ${data.lead.businessName}${data.foundWebsite ? " + their website" : ""}.`
+      );
+      await loadData();
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "Web enrichment failed.");
     } finally {
       setBusy(null);
     }
@@ -718,6 +759,7 @@ export default function LeadForgeApp() {
                     onAudit={auditLead}
                     onCrawl={crawlLead}
                     onEnrichPlace={enrichPlaceLead}
+                    onWebEnrich={webEnrichLead}
                     onPageSpeed={pageSpeedLead}
                     onDiagnose={diagnoseLead}
                     onDraft={draftOutreach}
@@ -785,6 +827,7 @@ export default function LeadForgeApp() {
               }}
               onStatus={updateStatus}
               onBulkDiagnose={(targets) => void bulkDiagnose(targets)}
+              onBulkDelete={bulkDelete}
             />
           ) : null}
 

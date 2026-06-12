@@ -10,6 +10,7 @@
  */
 
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import ws from "ws";
 import { auditWebsite } from "@/lib/audit";
 import { crawlWebsite } from "@/lib/crawler";
 import { generateOutreach } from "@/lib/outreach";
@@ -27,7 +28,12 @@ function db(): SupabaseClient {
     console.error("Missing NEXT_PUBLIC_SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY.");
     process.exit(1);
   }
-  return createClient(url, key, { auth: { persistSession: false } });
+  return createClient(url, key, {
+    auth: { persistSession: false },
+    // The worker never uses realtime, but supabase-js constructs the client at
+    // startup and Node < 22 lacks a native WebSocket — provide "ws" instead.
+    realtime: { transport: ws as unknown as new (...args: unknown[]) => WebSocket }
+  });
 }
 
 type JobRow = {
