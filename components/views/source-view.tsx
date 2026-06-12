@@ -780,6 +780,24 @@ export function SourcePlannerPanel({
   );
 }
 
+function searchUrlForTask(source: LeadSource, query: string): string {
+  const q = encodeURIComponent(query);
+  switch (source) {
+    case "Google Maps":
+      return `https://www.google.com/maps/search/?api=1&query=${q}`;
+    case "LinkedIn Manual":
+      return `https://www.linkedin.com/search/results/all/?keywords=${q}`;
+    case "OpenStreetMap":
+      return `https://www.openstreetmap.org/search?query=${q}`;
+    case "Domain Watch":
+      return `https://crt.sh/?q=${q}`;
+    case "BuiltWith/Wappalyzer":
+      return `https://builtwith.com/?${q}`;
+    default:
+      return `https://www.google.com/search?q=${q}`;
+  }
+}
+
 export function SearchRunsPanel({ searchRuns }: { searchRuns: SearchRun[] }) {
   return (
     <Panel
@@ -809,13 +827,25 @@ export function SearchRunsPanel({ searchRuns }: { searchRuns: SearchRun[] }) {
                 {run.tasks.map((task) => (
                   <div key={task.id} className="rounded-md border border-line bg-field p-2.5">
                     <div className="flex flex-col gap-1.5 md:flex-row md:items-center md:justify-between">
-                      <div>
+                      <div className="min-w-0">
                         <div className="text-xs font-medium">{task.query}</div>
                         <div className="mt-0.5 text-2xs text-soft">{task.intent}</div>
                       </div>
-                      <Badge icon={<Search className="h-3 w-3" />} tone="neutral">
-                        {task.source}
-                      </Badge>
+                      <div className="flex shrink-0 items-center gap-1.5">
+                        <Badge icon={<Search className="h-3 w-3" />} tone="neutral">
+                          {task.source}
+                        </Badge>
+                        <a
+                          href={searchUrlForTask(task.source, task.query)}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="inline-flex h-7 items-center gap-1.5 rounded-md border border-accent/40 bg-white px-2.5 text-2xs font-medium text-accent-deep transition hover:bg-accent hover:text-white"
+                          title={`Open this search on ${task.source === "Google Maps" ? "Google Maps" : task.source === "LinkedIn Manual" ? "LinkedIn" : "the web"} in a new tab`}
+                        >
+                          <Search className="h-3 w-3" />
+                          Search
+                        </a>
+                      </div>
                     </div>
                     <p className="mt-1.5 text-2xs text-ink/65">{task.action}</p>
                   </div>

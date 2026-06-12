@@ -23,6 +23,8 @@ export function TeamView({ onNotice }: { onNotice: (message: string) => void }) 
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
   const [inviteEmail, setInviteEmail] = useState("");
+  const [inviteAsAdmin, setInviteAsAdmin] = useState(false);
+  const [credentials, setCredentials] = useState<{ email: string; password: string } | null>(null);
   const [busy, setBusy] = useState(false);
 
   async function load() {
@@ -46,16 +48,28 @@ export function TeamView({ onNotice }: { onNotice: (message: string) => void }) 
 
   async function invite() {
     setBusy(true);
+    setCredentials(null);
     try {
       const response = await fetch("/api/team/invite", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ email: inviteEmail })
+        body: JSON.stringify({ email: inviteEmail, role: inviteAsAdmin ? "admin" : "member" })
       });
-      const json = (await response.json()) as { ok?: boolean; error?: string };
+      const json = (await response.json()) as {
+        ok?: boolean;
+        created?: boolean;
+        tempPassword?: string;
+        error?: string;
+      };
       if (!response.ok) throw new Error(json.error || "Invite failed");
-      onNotice(`${inviteEmail} added to your team.`);
+      if (json.created && json.tempPassword) {
+        setCredentials({ email: inviteEmail, password: json.tempPassword });
+        onNotice(`Account created for ${inviteEmail} and added to your team.`);
+      } else {
+        onNotice(`${inviteEmail} added to your team.`);
+      }
       setInviteEmail("");
+      setInviteAsAdmin(false);
       await load();
     } catch (err) {
       onNotice(err instanceof Error ? err.message : "Invite failed");
@@ -168,10 +182,51 @@ export function TeamView({ onNotice }: { onNotice: (message: string) => void }) 
               Add to team
             </Button>
           </div>
+          <label className="mt-2 flex cursor-pointer items-center gap-2 text-xs text-ink/80">
+            <input
+              type="checkbox"
+              className="accent-accent"
+              checked={inviteAsAdmin}
+              onChange={(event) => setInviteAsAdmin(event.target.checked)}
+            />
+            Give admin access (can add and remove team members)
+          </label>
           <p className="mt-2 text-2xs leading-4 text-soft">
-            They must register in the app first (it creates their account), then add their
-            email here — they'll move into your team and see all shared leads.
+            If they already registered, they move into your team instantly. If not, the
+            account is created for them and you'll get a temporary password to share.
           </p>
+
+          {credentials ? (
+            <div className="mt-3 rounded-md border border-moss/30 bg-moss/10 p-3">
+              <div className="text-xs font-semibold text-moss">
+                Account created — share these sign-in details:
+              </div>
+              <div className="mt-1.5 grid gap-0.5 font-mono text-xs text-ink/80">
+                <div>Email: {credentials.email}</div>
+                <div>Password: {credentials.password}</div>
+              </div>
+              <div className="mt-2 flex gap-1.5">
+                <Button
+                  variant="secondary"
+                  onClick={() => {
+                    void navigator.clipboard.writeText(
+                      `LeadForge access\nURL: ${window.location.origin}\nEmail: ${credentials.email}\nPassword: ${credentials.password}`
+                    );
+                    onNotice("Sign-in details copied to clipboard.");
+                  }}
+                >
+                  Copy details
+                </Button>
+                <Button variant="ghost" onClick={() => setCredentials(null)}>
+                  Dismiss
+                </Button>
+              </div>
+              <p className="mt-1.5 text-2xs text-soft">
+                Shown only once. They can sign in with this and use the Magic link option
+                later, or keep the password.
+              </p>
+            </div>
+          ) : null}
         </Panel>
       ) : null}
     </div>

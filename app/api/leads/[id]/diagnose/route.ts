@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
+import { bestOutreach } from "@/lib/ai-outreach";
 import { auditWebsite } from "@/lib/audit";
 import { isRemoteBackend } from "@/lib/backend";
 import { crawlWebsite } from "@/lib/crawler";
-import { generateOutreach } from "@/lib/outreach";
 import { pageSpeedSignals, runPageSpeed } from "@/lib/pagespeed";
 import { refreshLeadScore } from "@/lib/scoring";
 import { enqueueCrawlJob, getLead, replaceLead } from "@/lib/store";
@@ -94,9 +94,11 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
 
   // 3. Rescore with all fresh evidence, then draft outreach from it.
   working = refreshLeadScore(working);
+  const { outreach, aiError } = await bestOutreach(working);
+  if (aiError) warnings.push(`AI outreach fell back to template: ${aiError}`);
   working = {
     ...working,
-    outreach: generateOutreach(working),
+    outreach,
     status:
       working.status === "New" || working.status === "Qualified" ? "Drafted" : working.status,
     nextAction: "Manually approve and send the best outreach draft",

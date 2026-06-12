@@ -7,11 +7,13 @@ import {
   CalendarClock,
   ChevronDown,
   ExternalLink,
+  FileDown,
   FileText,
   Gauge,
   Globe2,
   Monitor,
   MapPin,
+  PanelLeftClose,
   PhoneCall,
   Plus,
   Search,
@@ -30,6 +32,7 @@ import {
   Badge,
   Button,
   CheckRow,
+  CollapsibleSection,
   DraftBox,
   EmptyState,
   Field,
@@ -45,15 +48,21 @@ export function LeadCapturePanel({
   form,
   setForm,
   busy,
-  onSubmit
+  onSubmit,
+  onCollapse
 }: {
   form: LeadForm;
   setForm: (form: LeadForm) => void;
   busy: boolean;
   onSubmit: () => void;
+  onCollapse?: () => void;
 }) {
   return (
-    <Panel title="Add Lead" badge={<Badge icon={<Bot className="h-3 w-3" />} tone="blue">Audit ready</Badge>}>
+    <Panel
+      title="Add Lead"
+      badge={<Badge icon={<Bot className="h-3 w-3" />} tone="blue">Audit ready</Badge>}
+      onCollapse={onCollapse}
+    >
       <div className="grid gap-2.5">
         <Field label="Business name">
           <input
@@ -156,23 +165,35 @@ export function LeadListPanel(props: {
   setStatusFilter: (value: LeadStatus | "All") => void;
   selectedLeadId: string | null;
   onSelect: (id: string) => void;
+  onCollapse?: () => void;
 }) {
   return (
     <Panel className="flex min-w-0 flex-col">
-      <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-        <h2 className="text-sm font-semibold tracking-tight">Lead Queue</h2>
-        <div className="flex gap-1.5">
-          <div className="relative">
+      <div className="flex flex-wrap items-center gap-2">
+        <h2 className="flex shrink-0 items-center gap-1.5 whitespace-nowrap text-sm font-semibold tracking-tight">
+          {props.onCollapse ? (
+            <button
+              onClick={props.onCollapse}
+              className="flex h-6 w-6 items-center justify-center rounded-md text-soft transition hover:bg-ink/5 hover:text-ink"
+              title="Collapse queue — give the lead detail full width"
+            >
+              <PanelLeftClose className="h-3.5 w-3.5" />
+            </button>
+          ) : null}
+          Lead Queue
+        </h2>
+        <div className="ml-auto flex min-w-0 flex-1 justify-end gap-1.5">
+          <div className="relative min-w-24 max-w-52 flex-1">
             <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-ink/35" />
             <input
-              className="input h-8 w-full pl-8 md:w-52"
+              className="input h-8 w-full pl-8"
               value={props.query}
               onChange={(event) => props.setQuery(event.target.value)}
-              placeholder="Search leads"
+              placeholder="Search"
             />
           </div>
           <select
-            className="input h-8 w-32"
+            className="input h-8 w-28 shrink-0"
             value={props.statusFilter}
             onChange={(event) =>
               props.setStatusFilter(event.target.value as LeadStatus | "All")
@@ -543,6 +564,16 @@ export function LeadDetailPanel({
         >
           Draft outreach
         </Button>
+        {lead.audit ? (
+          <a
+            href={`/api/leads/${lead.id}/report`}
+            className="inline-flex h-8 select-none items-center justify-center gap-1.5 whitespace-nowrap rounded-md border border-moss/40 bg-white px-3 text-xs font-medium text-moss transition hover:bg-moss hover:text-white"
+            title="Download the branded client-facing audit PDF — attach it to your first email"
+          >
+            <FileDown className="h-3.5 w-3.5" />
+            Audit PDF
+          </a>
+        ) : null}
       </div>
 
       <div className="mt-4 grid gap-4">
@@ -572,9 +603,15 @@ export function LeadDetailPanel({
           </details>
         ) : null}
 
-        <div>
-          <SectionLabel>Signals</SectionLabel>
-          <div className="mt-1.5 grid gap-1.5">
+        <CollapsibleSection
+          title="Signals"
+          badge={
+            lead.painSignals.length ? (
+              <span className="rounded-full bg-ink/10 px-1.5 tabular-nums">{lead.painSignals.length}</span>
+            ) : null
+          }
+        >
+          <div className="grid gap-1.5">
             {lead.painSignals.length ? (
               lead.painSignals.slice(0, 6).map((signal) => (
                 <div key={signal.id} className="rounded-md border border-line bg-field p-2.5">
@@ -594,12 +631,11 @@ export function LeadDetailPanel({
               </p>
             )}
           </div>
-        </div>
+        </CollapsibleSection>
 
         {lead.audit?.pagespeed ? (
-          <div>
-            <SectionLabel>PageSpeed (Google)</SectionLabel>
-            <div className="mt-1.5 grid gap-1.5 sm:grid-cols-2">
+          <CollapsibleSection title="PageSpeed (Google)">
+            <div className="grid gap-1.5 sm:grid-cols-2">
               <PageSpeedCard
                 label="Mobile"
                 icon={<Smartphone className="h-3.5 w-3.5" />}
@@ -614,13 +650,12 @@ export function LeadDetailPanel({
             <p className="mt-1.5 text-2xs text-ink/35">
               Checked {new Date(lead.audit.pagespeed.checkedAt).toLocaleString()}
             </p>
-          </div>
+          </CollapsibleSection>
         ) : null}
 
         {lead.audit ? (
-          <div>
-            <SectionLabel>Website Audit</SectionLabel>
-            <div className="mt-1.5 grid grid-cols-2 gap-1.5">
+          <CollapsibleSection title="Website Audit" defaultOpen={false}>
+            <div className="grid grid-cols-2 gap-1.5">
               <AuditMetric label="Health" value={`${lead.audit.healthScore}/100`} />
               <AuditMetric label="Load" value={`${lead.audit.loadMs}ms`} />
               <AuditMetric label="HTML" value={`${Math.round(lead.audit.htmlBytes / 1024)}KB`} />
@@ -660,18 +695,54 @@ export function LeadDetailPanel({
                 ))}
               </div>
             ) : null}
-          </div>
+          </CollapsibleSection>
         ) : null}
 
         {lead.outreach ? (
-          <div>
-            <SectionLabel>Outreach Draft</SectionLabel>
-            <div className="mt-1.5 grid gap-2">
+          <CollapsibleSection
+            title="Outreach Pack"
+            badge={
+              lead.outreach.aiGenerated ? (
+                <Badge icon={<Sparkles className="h-3 w-3" />} tone="accent">
+                  AI personalized
+                </Badge>
+              ) : null
+            }
+          >
+            <div className="grid gap-2">
               <DraftBox
-                title={lead.outreach.subject}
+                title={`Email — ${lead.outreach.subject}`}
                 body={lead.outreach.shortEmail}
                 icon={<FileText className="h-3.5 w-3.5" />}
               />
+              {lead.outreach.subjectOptions?.length ? (
+                <div className="rounded-md border border-line bg-field px-2.5 py-2 text-2xs text-soft">
+                  <span className="font-semibold uppercase tracking-wide">Alt subjects: </span>
+                  {lead.outreach.subjectOptions.join(" · ")}
+                </div>
+              ) : null}
+              {lead.outreach.whatsapp ? (
+                <DraftBox
+                  title="WhatsApp"
+                  body={lead.outreach.whatsapp}
+                  icon={<PhoneCall className="h-3.5 w-3.5" />}
+                />
+              ) : null}
+              {lead.outreach.linkedinConnect ? (
+                <DraftBox
+                  title="LinkedIn — connection note"
+                  body={lead.outreach.linkedinConnect}
+                  icon={<Send className="h-3.5 w-3.5" />}
+                />
+              ) : null}
+              {lead.outreach.linkedinNote &&
+              lead.outreach.linkedinNote !== lead.outreach.linkedinConnect ? (
+                <DraftBox
+                  title="LinkedIn — after they accept"
+                  body={lead.outreach.linkedinNote}
+                  icon={<Send className="h-3.5 w-3.5" />}
+                />
+              ) : null}
               <DraftBox
                 title="Call opener"
                 body={lead.outreach.callOpener}
@@ -682,8 +753,46 @@ export function LeadDetailPanel({
                 body={lead.outreach.contactFormMessage}
                 icon={<Send className="h-3.5 w-3.5" />}
               />
+
+              {lead.outreach.followUps?.length ? (
+                <details className="group rounded-md border border-line bg-field">
+                  <summary className="flex cursor-pointer select-none items-center justify-between px-2.5 py-2 text-2xs font-semibold uppercase tracking-wide text-soft">
+                    Follow-up sequence ({lead.outreach.followUps.length})
+                    <ChevronDown className="h-3.5 w-3.5 transition group-open:rotate-180" />
+                  </summary>
+                  <div className="grid gap-2 border-t border-line/70 p-2.5">
+                    {lead.outreach.followUps.map((followUp, index) => (
+                      <DraftBox
+                        key={index}
+                        title={`Day ${followUp.day} · ${followUp.channel}`}
+                        body={followUp.message}
+                        icon={<Send className="h-3.5 w-3.5" />}
+                      />
+                    ))}
+                  </div>
+                </details>
+              ) : null}
+
+              {lead.outreach.replyPlaybook?.length ? (
+                <details className="group rounded-md border border-line bg-field">
+                  <summary className="flex cursor-pointer select-none items-center justify-between px-2.5 py-2 text-2xs font-semibold uppercase tracking-wide text-soft">
+                    Reply playbook — what to answer ({lead.outreach.replyPlaybook.length})
+                    <ChevronDown className="h-3.5 w-3.5 transition group-open:rotate-180" />
+                  </summary>
+                  <div className="grid gap-2 border-t border-line/70 p-2.5">
+                    {lead.outreach.replyPlaybook.map((play, index) => (
+                      <DraftBox
+                        key={index}
+                        title={`They say: "${play.intent}"`}
+                        body={play.response}
+                        icon={<FileText className="h-3.5 w-3.5" />}
+                      />
+                    ))}
+                  </div>
+                </details>
+              ) : null}
             </div>
-          </div>
+          </CollapsibleSection>
         ) : null}
 
         <div>

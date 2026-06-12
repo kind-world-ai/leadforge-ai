@@ -11,9 +11,9 @@
 
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import ws from "ws";
+import { bestOutreach } from "@/lib/ai-outreach";
 import { auditWebsite } from "@/lib/audit";
 import { crawlWebsite } from "@/lib/crawler";
-import { generateOutreach } from "@/lib/outreach";
 import { pageSpeedSignals, runPageSpeed } from "@/lib/pagespeed";
 import { refreshLeadScore } from "@/lib/scoring";
 import { leadToPgRow, pgRowToLead } from "@/lib/stores/pg-mapping";
@@ -129,9 +129,11 @@ async function runDiagnose(lead: Lead, maxPages: number): Promise<{ lead: Lead; 
   }
 
   working = refreshLeadScore(working);
+  const { outreach, aiError } = await bestOutreach(working);
+  if (aiError) warnings.push(`AI outreach fell back to template: ${aiError}`);
   working = {
     ...working,
-    outreach: generateOutreach(working),
+    outreach,
     status: working.status === "New" || working.status === "Qualified" ? "Drafted" : working.status,
     nextAction: "Manually approve and send the best outreach draft",
     updatedAt: new Date().toISOString()

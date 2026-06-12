@@ -1,3 +1,4 @@
+import { randomBytes } from "crypto";
 import { NextResponse } from "next/server";
 import { isRemoteBackend } from "@/lib/backend";
 import { supabaseAdmin } from "@/lib/supabase/admin";
@@ -7,17 +8,22 @@ export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 /**
- * Add an already-registered user to the caller's team by email.
- * Flow: teammate registers normally (gets their own solo team) → owner adds
- * them here → their profile.team_id moves to the owner's team.
+ * Add a user to the caller's team by email.
+ * - Already registered → moved into the team immediately.
+ * - Not registered yet → the account is CREATED with a temporary password,
+ *   added to the team, and the temp password is returned for the owner to share.
  */
 export async function POST(request: Request) {
   if (!isRemoteBackend()) {
     return NextResponse.json({ error: "Team features need the Supabase backend." }, { status: 400 });
   }
 
-  const body = (await request.json().catch(() => ({}))) as { email?: string };
+  const body = (await request.json().catch(() => ({}))) as {
+    email?: string;
+    role?: "member" | "admin";
+  };
   const email = body.email?.trim().toLowerCase();
+  const newRole = body.role === "admin" ? "admin" : "member";
   if (!email || !email.includes("@")) {
     return NextResponse.json({ error: "Enter a valid email." }, { status: 400 });
   }
@@ -28,28 +34,57 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Only the team owner or an admin can add members." }, { status: 403 });
     }
 
-    const { data: profile } = await supabaseAdmin()
-      .from("profiles")
-      .select("id, full_name, email, team_id")
-      .ilike("email", email)
-      .maybeSingle();
+    const admin = supabaseAdmin();
+    let profile = (
+      await admin
+        .from("profiles")
+        .select("id, full_name, email, team_id")
+        .ilike("email", email)
+        .maybeSingle()
+    ).data;
+
+    let tempPassword: string | undefined;
 
     if (!profile) {
-      return NextResponse.json(
-        {
-          error: `No account found for ${email}. Ask them to open the app and register first, then add them again.`
-        },
-        { status: 404 }
-      );
-    }
-    if (profile.team_id === teamId) {
+      // Create the account directly with a temporary password.
+      tempPassword = randomBytes(9).toString("base64url");
+      const { data: created, error: createError } = await admin.auth.admin.createUser({
+        email,
+        password: tempPassword,
+        email_confirm: true,
+        user_metadata: { full_name: email.split("@")[0] }
+      });
+      if (createError || !created.user) {
+        throw new Error(createError?.message || "Could not create the account.");
+      }
+      // The signup trigger creates their profile; fetch it (retry briefly).
+      for (let attempt = 0; attempt < 5 && !profile; attempt++) {
+        profile = (
+          await admin
+            .from("profiles")
+            .select("id, full_name, email, team_id")
+            .eq("id", created.user.id)
+            .maybeSingle()
+        ).data;
+        if (!profile) await new Promise((resolve) => setTimeout(resolve, 300));
+      }
+      if (!profile) {
+        // Trigger missing? Create the profile directly.
+        await admin.from("profiles").insert({
+          id: created.user.id,
+          email,
+          full_name: email.split("@")[0],
+          team_id: teamId
+        });
+        profile = { id: created.user.id, full_name: email.split("@")[0], email, team_id: null };
+      }
+    } else if (profile.team_id === teamId) {
       return NextResponse.json({ error: `${email} is already in your team.` }, { status: 409 });
     }
 
-    const admin = supabaseAdmin();
     const { error: memberError } = await admin
       .from("team_members")
-      .upsert({ team_id: teamId, user_id: profile.id, role: "member" });
+      .upsert({ team_id: teamId, user_id: profile.id, role: newRole });
     if (memberError) throw new Error(memberError.message);
 
     const { error: profileError } = await admin
@@ -60,7 +95,9 @@ export async function POST(request: Request) {
 
     return NextResponse.json({
       ok: true,
-      member: { userId: profile.id, email: profile.email, fullName: profile.full_name }
+      created: Boolean(tempPassword),
+      tempPassword,
+      member: { userId: profile.id, email: profile.email ?? email, fullName: profile.full_name, role: newRole }
     });
   } catch (error) {
     return NextResponse.json(

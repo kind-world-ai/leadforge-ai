@@ -24,7 +24,7 @@ import {
   parseMapsPaste
 } from "@/lib/lead-utils";
 import Sidebar from "@/components/sidebar";
-import { Metric } from "@/components/ui";
+import { CollapsedRail, Metric } from "@/components/ui";
 import {
   FollowUpStrip,
   LeadCapturePanel,
@@ -87,6 +87,8 @@ export default function LeadForgeApp() {
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<LeadStatus | "All">("All");
   const [leadForm, setLeadForm] = useState<LeadForm>(defaultLeadForm);
+  const [showCapture, setShowCapture] = useState(false);
+  const [showQueue, setShowQueue] = useState(true);
   const [searchForm, setSearchForm] = useState<SearchPlanForm>({
     market: "Tricity",
     country: "India",
@@ -616,10 +618,19 @@ export default function LeadForgeApp() {
     setBusy(`draft-${lead.id}`);
     try {
       const response = await fetch(`/api/leads/${lead.id}/outreach`, { method: "POST" });
-      const data = (await response.json()) as { lead?: Lead; error?: string };
+      const data = (await response.json()) as {
+        lead?: Lead;
+        usedAi?: boolean;
+        aiError?: string;
+        error?: string;
+      };
       if (!response.ok || !data.lead) throw new Error(data.error || "Draft failed");
       setSelectedLeadId(data.lead.id);
-      setNotice(`Outreach draft ready for ${data.lead.businessName}.`);
+      setNotice(
+        data.usedAi
+          ? `AI outreach pack ready for ${data.lead.businessName} — email, WhatsApp, LinkedIn, follow-ups and reply playbook.`
+          : `Outreach draft ready for ${data.lead.businessName}${data.aiError ? ` (AI failed: ${data.aiError}; used template)` : " (template — add ANTHROPIC_API_KEY for AI personalization)"}.`
+      );
       await loadData();
     } catch (error) {
       setNotice(error instanceof Error ? error.message : "Draft failed.");
@@ -736,23 +747,49 @@ export default function LeadForgeApp() {
                 <Metric label="Contacted" value={stats.contacted} tone="sky" />
                 <Metric label="Won" value={stats.won} tone="green" />
               </section>
-              <section className="mt-3 grid items-start gap-3 xl:grid-cols-[330px_minmax(0,1fr)]">
-                <LeadCapturePanel
-                  form={leadForm}
-                  setForm={setLeadForm}
-                  busy={busy === "create-lead"}
-                  onSubmit={() => void createLeadFromForm()}
-                />
-                <div className="grid items-start gap-3 xl:grid-cols-[minmax(0,1.05fr)_minmax(380px,0.95fr)]">
-                  <LeadListPanel
-                    leads={filteredLeads}
-                    query={query}
-                    setQuery={setQuery}
-                    statusFilter={statusFilter}
-                    setStatusFilter={setStatusFilter}
-                    selectedLeadId={selectedLead?.id ?? null}
-                    onSelect={setSelectedLeadId}
+              <section
+                className={`mt-3 grid items-start gap-3 ${
+                  showCapture
+                    ? "xl:grid-cols-[320px_minmax(0,1fr)]"
+                    : "xl:grid-cols-[44px_minmax(0,1fr)]"
+                }`}
+              >
+                {showCapture ? (
+                  <LeadCapturePanel
+                    form={leadForm}
+                    setForm={setLeadForm}
+                    busy={busy === "create-lead"}
+                    onSubmit={() => void createLeadFromForm()}
+                    onCollapse={() => setShowCapture(false)}
                   />
+                ) : (
+                  <CollapsedRail label="Add Lead" onExpand={() => setShowCapture(true)} />
+                )}
+                <div
+                  className={`grid items-start gap-3 ${
+                    showQueue
+                      ? "xl:grid-cols-[minmax(0,1fr)_minmax(440px,1.15fr)]"
+                      : "xl:grid-cols-[44px_minmax(0,1fr)]"
+                  }`}
+                >
+                  {showQueue ? (
+                    <LeadListPanel
+                      leads={filteredLeads}
+                      query={query}
+                      setQuery={setQuery}
+                      statusFilter={statusFilter}
+                      setStatusFilter={setStatusFilter}
+                      selectedLeadId={selectedLead?.id ?? null}
+                      onSelect={setSelectedLeadId}
+                      onCollapse={() => setShowQueue(false)}
+                    />
+                  ) : (
+                    <CollapsedRail
+                      label="Lead Queue"
+                      count={filteredLeads.length}
+                      onExpand={() => setShowQueue(true)}
+                    />
+                  )}
                   <LeadDetailPanel
                     lead={selectedLead}
                     busy={busy}

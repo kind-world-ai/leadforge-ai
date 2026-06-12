@@ -1,7 +1,8 @@
 "use client";
 
-import { FileText, Loader2 } from "lucide-react";
+import { Check, ChevronDown, ChevronsRight, Copy, FileText, Loader2, PanelLeftClose } from "lucide-react";
 import type React from "react";
+import { useState } from "react";
 import { serviceOptions, type LeadStatus, type ServiceFocus } from "@/lib/types";
 
 /* ---------- Layout primitives ---------- */
@@ -10,23 +11,94 @@ export function Panel({
   title,
   badge,
   children,
-  className = ""
+  className = "",
+  onCollapse
 }: {
   title?: string;
   badge?: React.ReactNode;
   children: React.ReactNode;
   className?: string;
+  onCollapse?: () => void;
 }) {
   return (
     <section className={`panel p-3.5 ${className}`}>
       {title ? (
         <div className="mb-3 flex items-center justify-between gap-2">
           <h2 className="text-sm font-semibold tracking-tight">{title}</h2>
-          {badge}
+          <div className="flex items-center gap-1.5">
+            {badge}
+            {onCollapse ? (
+              <button
+                onClick={onCollapse}
+                className="flex h-6 w-6 items-center justify-center rounded-md text-soft transition hover:bg-ink/5 hover:text-ink"
+                title="Collapse panel"
+              >
+                <PanelLeftClose className="h-3.5 w-3.5" />
+              </button>
+            ) : null}
+          </div>
         </div>
       ) : null}
       {children}
     </section>
+  );
+}
+
+/** Slim vertical rail shown in place of a collapsed panel — click to expand. */
+export function CollapsedRail({
+  label,
+  count,
+  onExpand
+}: {
+  label: string;
+  count?: number;
+  onExpand: () => void;
+}) {
+  return (
+    <button
+      onClick={onExpand}
+      className="panel flex min-h-48 w-full flex-col items-center gap-2 px-1.5 py-3 transition hover:border-accent/40 xl:w-[44px]"
+      title={`Expand ${label}`}
+    >
+      <ChevronsRight className="h-3.5 w-3.5 text-accent" />
+      <span
+        className="text-2xs font-semibold uppercase tracking-wider text-soft"
+        style={{ writingMode: "vertical-rl" }}
+      >
+        {label}
+      </span>
+      {typeof count === "number" ? (
+        <span className="rounded-full bg-ink/10 px-1.5 text-2xs tabular-nums text-soft">
+          {count}
+        </span>
+      ) : null}
+    </button>
+  );
+}
+
+/** Collapsible content section used inside the lead detail panel. */
+export function CollapsibleSection({
+  title,
+  badge,
+  defaultOpen = true,
+  children
+}: {
+  title: string;
+  badge?: React.ReactNode;
+  defaultOpen?: boolean;
+  children: React.ReactNode;
+}) {
+  return (
+    <details open={defaultOpen} className="group/section rounded-md border border-line">
+      <summary className="flex cursor-pointer select-none items-center justify-between gap-2 rounded-md bg-field px-2.5 py-2 transition hover:bg-ink/5">
+        <span className="flex items-center gap-2 text-2xs font-semibold uppercase tracking-wide text-soft">
+          {title}
+          {badge}
+        </span>
+        <ChevronDown className="h-3.5 w-3.5 text-soft transition group-open/section:rotate-180" />
+      </summary>
+      <div className="p-2.5">{children}</div>
+    </details>
   );
 }
 
@@ -239,11 +311,33 @@ export function DraftBox({
   body: string;
   icon: React.ReactNode;
 }) {
+  const [copied, setCopied] = useState(false);
+
+  function copy() {
+    void navigator.clipboard.writeText(body);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1500);
+  }
+
   return (
     <div className="rounded-md border border-line bg-field p-2.5">
-      <div className="flex items-center gap-1.5 text-xs font-semibold">
-        {icon}
-        {title}
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex min-w-0 items-center gap-1.5 text-xs font-semibold">
+          {icon}
+          <span className="truncate">{title}</span>
+        </div>
+        <button
+          onClick={copy}
+          className={`inline-flex h-6 shrink-0 items-center gap-1 rounded-md border px-2 text-2xs font-medium transition ${
+            copied
+              ? "border-moss/40 bg-moss/10 text-moss"
+              : "border-line bg-white text-soft hover:border-ink/25 hover:text-ink"
+          }`}
+          title="Copy to clipboard"
+        >
+          {copied ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
+          {copied ? "Copied" : "Copy"}
+        </button>
       </div>
       <pre className="mt-2 whitespace-pre-wrap rounded-md border border-line/70 bg-white p-2.5 font-sans text-xs leading-5 text-ink/80">
         {body}

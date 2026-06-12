@@ -119,13 +119,30 @@ export interface CrawlPageResult {
   problems: PainSignal[];
 }
 
+export interface FollowUpDraft {
+  day: number;
+  channel: string;
+  message: string;
+}
+
+export interface ReplyPlay {
+  intent: string;
+  response: string;
+}
+
 export interface OutreachDraft {
   generatedAt: string;
   subject: string;
+  subjectOptions?: string[];
   shortEmail: string;
+  whatsapp?: string;
+  linkedinConnect?: string;
   callOpener: string;
   linkedinNote: string;
   contactFormMessage: string;
+  followUps?: FollowUpDraft[];
+  replyPlaybook?: ReplyPlay[];
+  aiGenerated?: boolean;
 }
 
 export interface ScorePart {
